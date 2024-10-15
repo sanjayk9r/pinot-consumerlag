@@ -103,37 +103,45 @@ func fetchConsumerLag(pinotControllerURL, tableName, authHeader string, lagThres
 	}
 
 	// Iterate over segments and collect table name, partition names, and their respective lags
-	var tableLagSummaries []TableLagSummary
-
+	tableLagMap := make(map[string]*TableLagSummary)
 	for _, consumingInfos := range consumingInfo.SegmentToConsumingInfo {
 
-		// Collect partition lags
-		var partitions []PartitionLag
-		totalLag := int64(0)
-
+		// Process each ConsumingInfo
 		for _, consumingInfo := range consumingInfos {
+			// Check if we already have an entry for this table
+			tableLagSummary, exists := tableLagMap[tableName]
+			if !exists {
+				// Initialize a new TableLagSummary if it doesn't exist
+				tableLagSummary = &TableLagSummary{
+					TableName:  tableName,
+					Partitions: []PartitionLag{},
+					TotalLag:   0,
+				}
+				tableLagMap[tableName] = tableLagSummary
+			}
+
+			// Collect partition lags
 			for partitionID, recordLag := range consumingInfo.PartitionOffsetInfo.RecordsLagMap {
 				lagValue := stringToInt64(recordLag)
 
 				// Add the partition's lag to the total lag
-				totalLag += lagValue
+				tableLagSummary.TotalLag += lagValue
 
-				// Collect partition lag
-				partitions = append(partitions, PartitionLag{
+				// Append partition lag to the Partitions slice
+				tableLagSummary.Partitions = append(tableLagSummary.Partitions, PartitionLag{
 					PartitionID: partitionID,
 					RecordLag:   lagValue,
 				})
 			}
 		}
+	}
 
-		// Add the table lag summary to the results
-		// transitory lag: Only Consider with 1000+ records
-		if totalLag >= lagThreshold {
-			tableLagSummaries = append(tableLagSummaries, TableLagSummary{
-				TableName:  tableName,
-				Partitions: partitions,
-				TotalLag:   totalLag,
-			})
+	// Prepare the final results
+	var tableLagSummaries []TableLagSummary
+	for _, summary := range tableLagMap {
+		// Only consider tables where the total lag exceeds the threshold
+		if summary.TotalLag >= lagThreshold {
+			tableLagSummaries = append(tableLagSummaries, *summary)
 		}
 	}
 
