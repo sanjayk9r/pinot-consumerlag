@@ -1,0 +1,9 @@
+{
+  "clusters": [
+    {
+      "name": "LocalCluster",
+      "pinotControllerURL": "http://localhost:9000",
+      "lagThreshold": 0
+    }
+  ]
+}
